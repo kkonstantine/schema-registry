@@ -491,6 +491,9 @@ public class AvroData {
               requireContainer);
 
         case BYTES: {
+          if (value instanceof BigDecimal) {
+            value = ((BigDecimal) value).unscaledValue().toByteArray();
+          }
           ByteBuffer bytesValue = value instanceof byte[] ? ByteBuffer.wrap((byte[]) value) :
                                   (ByteBuffer) value;
           return maybeAddContainer(
@@ -823,10 +826,6 @@ public class AvroData {
             String precisionValue = schema.parameters().get(CONNECT_AVRO_DECIMAL_PRECISION_PROP);
             int precision = Integer.parseInt(precisionValue);
             baseSchema.addProp(AVRO_LOGICAL_DECIMAL_PRECISION_PROP, new IntNode(precision));
-          } else {
-            baseSchema
-                .addProp(AVRO_LOGICAL_DECIMAL_PRECISION_PROP,
-                         new IntNode(CONNECT_AVRO_DECIMAL_PRECISION_DEFAULT));
           }
         }
         break;
@@ -933,13 +932,43 @@ public class AvroData {
         }
       }
 
+      // the new and correct way to handle logical types
+      if (schema.name() != null) {
+        if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+          String precisionString = schema.parameters().get(CONNECT_AVRO_DECIMAL_PRECISION_PROP);
+          // preserve decimal logical type iff precision is specified,
+          // as assuming fixed precision for arbitrary precision record might incur data loss
+          if (precisionString != null) {
+            int precision = Integer.parseInt(precisionString);
+            int scale = Integer.parseInt(schema.parameters().get(Decimal.SCALE_FIELD));
+            org.apache.avro.LogicalTypes.decimal(precision, scale).addToSchema(baseSchema);
+          }
+        } else if (Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+          org.apache.avro.LogicalTypes.timeMillis().addToSchema(baseSchema);
+        } else if (Timestamp.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+          org.apache.avro.LogicalTypes.timestampMillis().addToSchema(baseSchema);
+        } else if (Date.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+          org.apache.avro.LogicalTypes.date().addToSchema(baseSchema);
+        }
+      }
+
+      // Initially, to add support for logical types a new property was added
+      // with key `logicalType`. This enabled logical types for avro schemas but not others,
+      // such as parquet. The use of 'addToSchema` above supersedes this method here,
+      //  which should eventually be removed.
+      // Keeping for backwards compatibility until a major version upgrade happens.
+
+      // Below follows the older method of supporting logical types via properties.
+      // It is retained for now and will be deprecated eventually.
+      //
       // Only Avro named types (record, enum, fixed) may contain namespace + name. Only Connect's
       // struct converts to one of those (record), so for everything else that has a name we store
       // the full name into a special property. For uniformity, we also duplicate this info into
       // the same field in records as well even though it will also be available in the namespace()
       // and name().
       if (schema.name() != null) {
-        if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
+        if (Decimal.LOGICAL_NAME.equalsIgnoreCase(schema.name())
+            && schema.parameters().containsKey(CONNECT_AVRO_DECIMAL_PRECISION_PROP)) {
           baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_DECIMAL);
         } else if (Time.LOGICAL_NAME.equalsIgnoreCase(schema.name())) {
           baseSchema.addProp(AVRO_LOGICAL_TYPE_PROP, AVRO_LOGICAL_TIME_MILLIS);
