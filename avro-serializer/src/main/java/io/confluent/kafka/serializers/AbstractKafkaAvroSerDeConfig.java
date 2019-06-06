@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientConfig;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
@@ -37,6 +39,7 @@ import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
  * defaults.
  */
 public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
+  private static final Logger log = LoggerFactory.getLogger(AbstractKafkaAvroSerDeConfig.class);
 
   /**
    * Configurations beginning with this prefix can be used to specify headers to include in requests
@@ -164,12 +167,16 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
   // is not an instance of io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy
   public <T> T getConfiguredInstanceFromThis(String key, Class<T> t) {
     Class<?> c = getClass(key);
+    log.info("Class {} classloader {}", c.toString(), c.getClassLoader().toString());
+    log.info("Class {} classloader {}", t.toString(), t.getClassLoader().toString());
     if (c == null) {
       return null;
     } else {
       Object o;
       try {
         o = c.getDeclaredConstructor().newInstance();
+        log.info("Class {} classloader {}",
+            o.getClass().toString(), o.getClass().getClassLoader().toString());
       } catch (NoSuchMethodException e) {
         throw new KafkaException(
             "Could not find a public no-argument constructor for " + c.getName(), e);
