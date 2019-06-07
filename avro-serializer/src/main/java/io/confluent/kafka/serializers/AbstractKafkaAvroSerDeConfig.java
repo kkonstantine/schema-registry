@@ -16,12 +16,10 @@
 
 package io.confluent.kafka.serializers;
 
-import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigDef.Importance;
-import org.apache.kafka.common.config.ConfigDef.Type;
+import io.confluent.common.config.AbstractConfig;
+import io.confluent.common.config.ConfigDef;
+import io.confluent.common.config.ConfigDef.Importance;
+import io.confluent.common.config.ConfigDef.Type;
 
 import java.util.List;
 import java.util.Map;
@@ -151,47 +149,9 @@ public class AbstractKafkaAvroSerDeConfig extends AbstractConfig {
     Class<?> subjectNameStrategyClass = getClass(strategyClassName);
     Class<?> deprecatedClass = io.confluent.kafka.serializers.subject.SubjectNameStrategy.class;
     if (deprecatedClass.isAssignableFrom(subjectNameStrategyClass)) {
-      return getConfiguredInstanceFromThis(strategyClassName, deprecatedClass);
+      return getConfiguredInstance(strategyClassName, deprecatedClass);
     }
-    return getConfiguredInstanceFromThis(strategyClassName, SubjectNameStrategy.class);
-  }
-
-  // We must provide this method even though the implementation is the same as equivalent method in
-  // the base class. The reason is that this method instantiates an object with the given class
-  // type. But this object is instantiated with the classloader that loaded the configuration class
-  // itself. Therefore, if this task is delegated to the AbstractConfig class from the
-  // org.apache.kafka the class will be instantiated using the system classloader that loaded the
-  // AbstractConfig and not the classloader that loaded this converter in isolation. This leads to
-  // a mismatch on the interfaces resulting in errors such as:
-  // io.confluent.kafka.serializers.subject.TopicNameStrategy
-  // is not an instance of io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy
-  public <T> T getConfiguredInstanceFromThis(String key, Class<T> t) {
-    Class<?> c = getClass(key);
-    log.info("Class {} classloader {}", c.toString(), c.getClassLoader().toString());
-    log.info("Class {} classloader {}", t.toString(), t.getClassLoader().toString());
-    if (c == null) {
-      return null;
-    } else {
-      Object o;
-      try {
-        o = c.getDeclaredConstructor().newInstance();
-        log.info("Class {} classloader {}",
-            o.getClass().toString(), o.getClass().getClassLoader().toString());
-      } catch (NoSuchMethodException e) {
-        throw new KafkaException(
-            "Could not find a public no-argument constructor for " + c.getName(), e);
-      } catch (ReflectiveOperationException | RuntimeException e) {
-        throw new KafkaException("Could not instantiate class " + c.getName(), e);
-      }
-      if (!t.isInstance(o)) {
-        throw new KafkaException(c.getName() + " is not an instance of " + t.getName());
-      } else {
-        if (o instanceof Configurable) {
-          ((Configurable)o).configure(this.originals());
-        }
-        return t.cast(o);
-      }
-    }
+    return getConfiguredInstance(strategyClassName, SubjectNameStrategy.class);
   }
 
   public String basicAuthUserInfo() {
